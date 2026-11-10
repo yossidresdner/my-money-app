@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>My money</title>
+<style>
+:root{--bg:#f1f5f2;--card:#fff;--ink:#14231c;--mute:#5d6e65;--line:#d5dfd9;--acc:#0f6b5a;--onacc:#fff;--neg:#b3261e;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#101a15;--card:#18251f;--ink:#e8f1ec;--mute:#93a79b;--line:#2b3c33;--acc:#4fc1a6;--onacc:#06231b;--neg:#ff8a80}}
+:root[data-theme="dark"]{--bg:#101a15;--card:#18251f;--ink:#e8f1ec;--mute:#93a79b;--line:#2b3c33;--acc:#4fc1a6;--onacc:#06231b;--neg:#ff8a80}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:520px;margin:0 auto;padding:20px 16px 48px}
+.total{padding:28px 4px 20px}
+.total p{margin:0;color:var(--mute);font-size:15px}
+.total strong{display:block;font-size:clamp(40px,12vw,56px);line-height:1.1;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.total strong.neg{color:var(--neg)}
+ul{list-style:none;margin:0;padding:0;background:var(--card);border:1px solid var(--line);border-radius:14px}
+li{padding:12px 14px;border-bottom:1px solid var(--line)}
+.top{display:flex;align-items:center;gap:10px}
+.mv{display:flex;gap:8px;margin-top:10px}
+.mv input{flex:1 1 0;width:auto;text-align:right}
+.mv button{flex:0 0 auto;font-weight:600}
+.mv .sp{color:var(--neg);border-color:var(--neg)}
+.mv .rc{color:var(--acc);border-color:var(--acc)}
+.total p.month{margin-top:10px}
+.total p.month b{color:var(--ink);font-variant-numeric:tabular-nums}
+li:last-child{border-bottom:0}
+li .name{flex:1;min-width:0;font-weight:600;overflow-wrap:anywhere}
+input{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-width:0}
+input:focus-visible,button:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+li input{width:8.5em;text-align:right;font-variant-numeric:tabular-nums}
+button{font:inherit;cursor:pointer;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--mute);padding:8px 10px}
+button.del{border:0;font-size:20px;line-height:1;padding:6px 8px}
+.empty{padding:18px 14px;color:var(--mute)}
+.add{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px}
+.add input[name=n]{flex:2 1 150px}
+.add input[name=b]{flex:1 1 110px;text-align:right}
+.add button{flex:1 1 100%;background:var(--acc);color:var(--onacc);border-color:var(--acc);font-weight:600;padding:12px}
+.note{margin:20px 4px 0;color:var(--mute);font-size:14px}
+</style>
+</head>
+<body>
+<main>
+  <section class="total" aria-live="polite">
+    <p>Total across all accounts</p>
+    <strong id="total">£0.00</strong>
+    <p class="month">Spent this month: <b id="month">£0.00</b></p>
+  </section>
+  <ul id="list"></ul>
+  <div class="add" role="group" aria-label="Add an account">
+    <input name="n" id="n" placeholder="Account name, e.g. Barclays current" aria-label="Account name" autocomplete="off">
+    <input name="b" id="b" placeholder="Balance" inputmode="decimal" aria-label="Balance in pounds" autocomplete="off">
+    <button type="button" id="addBtn">Add account</button>
+  </div>
+  <p class="note">This page isn’t connected to your banks. Type in each balance to start. After that, use Spent and Received and the balance updates itself. Changing a balance by hand doesn’t count as spending. Your numbers stay on this device and aren’t sent anywhere.</p>
+</main>
+<script>
+(function(){
+  var KEY='my-money-accounts-v1', accounts=[];
+  var fmt=new Intl.NumberFormat('en-GB',{style:'currency',currency:'GBP'});
+  function load(){try{var r=localStorage.getItem(KEY);var d=r?JSON.parse(r):[];if(Array.isArray(d))accounts=d.filter(function(a){return a&&typeof a.name==='string'&&isFinite(a.bal)})}catch(e){accounts=[]}}
+  function save(){try{localStorage.setItem(KEY,JSON.stringify(accounts))}catch(e){}}
+  function parse(s){var v=parseFloat(String(s).replace(/[£,\s]/g,''));return isFinite(v)?Math.round(v*100)/100:NaN}
+  function monthStart(){var d=new Date();return new Date(d.getFullYear(),d.getMonth(),1).getTime()}
+  function move(a,sign,input){var v=parse(input.value);if(isNaN(v)||v<=0){input.focus();return}a.bal=Math.round((a.bal+sign*v)*100)/100;(a.tx=a.tx||[]).push({t:Date.now(),amt:sign*v});save();render()}
+  function render(){
+    var list=document.getElementById('list');list.textContent='';
+    if(!accounts.length){var e=document.createElement('li');e.className='empty';e.textContent='No accounts yet. Add your first one below.';list.appendChild(e)}
+    var sum=0,spent=0,ms=monthStart();
+    accounts.forEach(function(a,i){
+      sum+=a.bal;(a.tx||[]).forEach(function(x){if(x.amt<0&&x.t>=ms)spent-=x.amt});
+      var li=document.createElement('li');
+      var nm=document.createElement('span');nm.className='name';nm.textContent=a.name;
+      var inp=document.createElement('input');inp.value=a.bal.toFixed(2);inp.inputMode='decimal';inp.setAttribute('aria-label','Balance for '+a.name);
+      inp.addEventListener('change',function(){var v=parse(inp.value);if(isNaN(v)){inp.value=a.bal.toFixed(2);return}a.bal=v;save();render()});
+      var d=document.createElement('button');d.className='del';d.type='button';d.textContent='×';d.setAttribute('aria-label','Remove '+a.name);
+      d.addEventListener('click',function(){if(confirm('Remove '+a.name+'?')){accounts.splice(i,1);save();render()}});
+      var top=document.createElement('div');top.className='top';top.appendChild(nm);top.appendChild(inp);top.appendChild(d);
+      var mv=document.createElement('div');mv.className='mv';
+      var amt=document.createElement('input');amt.placeholder='Amount';amt.inputMode='decimal';amt.setAttribute('aria-label','Amount for '+a.name);
+      var sp=document.createElement('button');sp.type='button';sp.className='sp';sp.textContent='Spent';sp.addEventListener('click',function(){move(a,-1,amt)});
+      var rc=document.createElement('button');rc.type='button';rc.className='rc';rc.textContent='Received';rc.addEventListener('click',function(){move(a,1,amt)});
+      mv.appendChild(amt);mv.appendChild(sp);mv.appendChild(rc);
+      li.appendChild(top);li.appendChild(mv);list.appendChild(li);
+    });
+    var t=document.getElementById('total');t.textContent=fmt.format(sum);t.className=sum<0?'neg':'';document.getElementById('month').textContent=fmt.format(Math.round(spent*100)/100);
+  }
+  function add(){
+    var n=document.getElementById('n'),b=document.getElementById('b');
+    var name=n.value.trim(),bal=parse(b.value===''?'0':b.value);
+    if(!name){n.focus();return}
+    if(isNaN(bal)){b.focus();return}
+    accounts.push({name:name,bal:bal});save();render();n.value='';b.value='';n.focus();
+  }
+  document.getElementById('addBtn').addEventListener('click',add);
+  ['n','b'].forEach(function(id){document.getElementById(id).addEventListener('keydown',function(e){if(e.key==='Enter')add()})});
+  load();render();
+})();
+</script>
+</body>
+</html>
